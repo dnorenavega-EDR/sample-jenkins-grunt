@@ -1,70 +1,242 @@
-module.exports = function(grunt) {
+module.exports = function (grunt) {
 
-  // Project configuration.
+  // Load grunt tasks automatically
+  require('load-grunt-tasks')(grunt);
+
+  // Time how long tasks take. Can help when optimizing build times
+  require('time-grunt')(grunt);
+
+  // Define the configuration for all the tasks
   grunt.initConfig({
-    pkg: grunt.file.readJSON('package.json'),
-    clean: ['dist/*.js', 'test/testem.tap'],
-    jshint: {
-      all: ['src/*.js'],
-      options: grunt.file.readJSON('.jshintrc')
+
+    // Automatically inject Bower components into the app
+    bowerInstall: {
+      app: {
+        src: ['app/index.html'],
+        ignorePath: 'app/',
+        exclude: [
+          'app/bower_components/jquery/dist/jquery.js',
+          'app/bower_components/bootstrap/dist/js/bootstrap.js',
+          'app/bower_components/bootstrap-css/js/bootstrap.min.js'
+        ]
+      },
+      sass: {
+        src: ['app/styles/{,*/}*.{scss,sass}'],
+        ignorePath: 'app/bower_components/'
+      }
     },
-    concat: {
-      build: {
+
+    // Renames files for browser caching purposes
+    rev: {
+      dist: {
         files: {
-          'dist/<%= pkg.name %>.js': [
-            'src/superb.js',
-            'src/impressive.js'
+          src: [
+            'dist/scripts/{,*/}*.js',
+            'dist/styles/{,*/}*.css',
+            'dist/images/{,*/}*.{png,jpg,jpeg,gif,webp,svg}',
+            'dist/styles/fonts/*'
           ]
         }
       }
     },
-    uglify: {
+
+    // Reads HTML for usemin blocks to enable smart builds that automatically
+    // concat, minify and revision files. Creates configurations in memory so
+    // additional tasks can operate on them
+    useminPrepare: {
+      html: 'app/index.html',
       options: {
-        banner: '/*! <%= pkg.name %> <%= grunt.template.today("yyyy-mm-dd") %> */\n'
-      },
-      build: {
-        src: 'dist/<%= pkg.name %>.js',
-        dest: 'dist/<%= pkg.name %>.min.js'
-      }
-    },
-    testem: {
-      options: {
-        launch_in_ci: ['PhantomJS']
-      },
-      'test/testem.tap': ['test/*.html']
-    },
-    "qunit-cov": {
-      test: {
-        minimum: 0.9,
-        srcDir: 'src',
-        depDirs: ['test'],
-        outDir: 'dist/cov',
-        testFiles: ['test/*.html']
-      }
-    },
-    plato: {
-      options: {
-        title: 'Awesome Project',
-        jshint: grunt.file.readJSON('.jshintrc')
-      },
-      metrics: {
-        files: {
-          'dist/metrics': [ 'src/*.js' ]
+        dest: 'dist',
+        flow: {
+          html: {
+            steps: {
+              js: ['concat', 'uglifyjs'],
+              css: ['cssmin']
+            },
+            post: {}
+          }
         }
+      }
+    },
+
+    // Performs rewrites based on rev and the useminPrepare configuration
+    usemin: {
+      html: ['dist/{,*/}*.html'],
+      css: ['dist/styles/{,*/}*.css'],
+      options: {
+        assetsDirs: ['dist']
+      }
+    },
+
+    // The following *-min tasks produce minified files in the dist folder
+    cssmin: {
+      options: {
+        root: 'app'
+      }
+    },
+
+    imagemin: {
+      dist: {
+        files: [{
+          expand: true,
+          cwd: 'app/images',
+          src: '{,*/}*.{png,jpg,jpeg,gif}',
+          dest: 'dist/images'
+        }]
+      }
+    },
+
+    svgmin: {
+      dist: {
+        files: [{
+          expand: true,
+          cwd: 'app/images',
+          src: '{,*/}*.svg',
+          dest: 'dist/images'
+        }]
+      }
+    },
+
+    htmlmin: {
+      dist: {
+        options: {
+          collapseWhitespace: true,
+          collapseBooleanAttributes: true,
+          removeCommentsFromCDATA: true,
+          removeOptionalTags: true
+        },
+        files: [{
+          expand: true,
+          cwd: 'dist',
+          src: ['*.html', 'views/{,*/}*.html', 'scripts/directives/{,*/}*.html'],
+          dest: 'dist'
+        }]
+      }
+    },
+
+    // ngmin tries to make the code safe for minification automatically by
+    // using the Angular long form for dependency injection. It doesn't work on
+    // things like resolve or inject so those have to be done manually.
+    ngmin: {
+      dist: {
+        files: [{
+          expand: true,
+          cwd: '.tmp/concat/scripts',
+          src: '*.js',
+          dest: '.tmp/concat/scripts'
+        }]
+      }
+    },
+
+    // Replace Google CDN references
+    cdnify: {
+      dist: {
+        html: ['dist/*.html']
+      }
+    },
+
+    // Copies remaining files to places other tasks can use
+    copy: {
+      dist: {
+        files: [{
+          expand: true,
+          dot: true,
+          cwd: 'app',
+          dest: 'dist',
+          src: [
+            '*.{ico,png,txt}',
+            '.htaccess',
+            '*.html',
+            'views/{,*/}*.html',
+            'scripts/directives/{,*/}*.html',
+            'images/{,*/}*.{webp}',
+            'fonts/*',
+            'mockData/*'
+          ]
+        }, {
+          expand: true,
+          cwd: '.tmp/images',
+          dest: 'dist/images',
+          src: ['generated/*']
+        }]
+      },
+      styles: {
+        expand: true,
+        cwd: 'app/styles',
+        dest: '.tmp/styles/',
+        src: '{,*/}*.css'
+      }
+    },
+
+    targethtml: {
+      dist: {
+        files: {
+          'dist/index.html': 'dist/index.html'
+        }
+      }
+    },
+
+    // Test settings
+    karma: {
+      unit: {
+        configFile: 'karma.conf.js',
+        singleRun: true
+      },
+      // Jenkins settings
+      continuous: {
+        configFile: 'karma.conf.js',
+        singleRun: true,
+        browsers: ['PhantomJS'],
+        reporters: ['dots', 'junit'],
+        junitReporter: {
+          outputFile: 'test-results.xml'
+        }
+      }
+    },
+
+    compress: {
+      main: {
+        options: {
+          mode: 'tgz',
+          archive: 'target/myFinishedApp.tgz'
+        },
+        files: [{
+          expand: true,
+          src: '**/*',
+          cwd: 'dist/',
+          dot: true
+        }]
       }
     }
   });
 
-  grunt.loadNpmTasks('grunt-contrib-clean');
-  grunt.loadNpmTasks('grunt-contrib-jshint');
-  grunt.loadNpmTasks('grunt-contrib-concat');
-  grunt.loadNpmTasks('grunt-contrib-uglify');
-  grunt.loadNpmTasks('grunt-testem');
-  grunt.loadNpmTasks('grunt-qunit-cov');
-  grunt.loadNpmTasks('grunt-plato');
+  grunt.registerTask('build', [
+    'clean:dist',
+    'bowerInstall',
+    'useminPrepare',
+    'concurrent:dist',
+    'autoprefixer',
+    'concat',
+    'ngmin',
+    'copy:dist',
+    'cdnify',
+    'cssmin',
+    'uglify',
+    'rev',
+    'usemin',
+    'targethtml:dist',
+    'htmlmin'
+  ]);
 
-  // Default task(s).
-  grunt.registerTask('default', ['jshint', 'testem', 'clean', 'qunit-cov']);
-  grunt.registerTask('jenkins', ['jshint', 'testem', 'clean', 'qunit-cov', 'plato', 'concat', 'uglify']);
+  grunt.registerTask('default', [
+    'newer:jshint',
+    'test',
+    'build'
+  ]);
 
+  grunt.registerTask('cibuild', [
+    'karma:continuous',
+    'build',
+    'compress'
+  ]);
 };
